@@ -63,8 +63,8 @@ public class TriRapide {
     	if (debut < fin) {                             // S'il y a un seul élément, il n'y a rien à faire!
             int p = partitionner(t, debut, fin) ;
             synchronized (TriRapide.class) {count += 1;}
-            System.out.println(count);
             verificateur.submit(new triParallele(t, debut, p-1), null);
+            synchronized (TriRapide.class) {count += 1;}
             verificateur.submit(new triParallele(t, p+1, fin), null);
             /*try {
         		verificateur.take();
@@ -94,37 +94,38 @@ public class TriRapide {
 
         System.out.print("Tableau initial : ") ;
         afficher(tableau, 0, taille -1) ;                         // Affiche le tableau à trier
-        System.out.print("Tableau copié : ") ;
+        System.out.print("Tableau initial 2 : ") ;
         afficher(tableau2, 0, taille -1) ;                         // Affiche le tableau à trier
 
-        System.out.println("Démarrage du tri rapide.") ;
+        System.out.println("Démarrage du tri rapide séquentiel.") ;
 
         long debutDuTriSeq = System.nanoTime();
         trierRapidementSeq(tableau, 0, taille-1) ;                   // Tri du tableau
         long finDuTriSeq = System.nanoTime();
 
+        long dureeDuTriSeq = (finDuTriSeq - debutDuTriSeq) / 1_000_000 ;
+        System.out.print("Tableau trié : ") ;
+        afficher(tableau, 0, taille -1) ;                         // Affiche le tableau obtenu
+        System.out.println("obtenu en " + dureeDuTriSeq + " millisecondes.") ;
+
         count = 0;
         ExecutorService executeur = Executors.newFixedThreadPool(4);
         verificateur = new ExecutorCompletionService<Integer>(executeur);
 
+        System.out.println("Démarrage du tri rapide parralèlle.") ;
+
         long debutDuTriPar = System.nanoTime();
         trierRapidementParallele(tableau2, 0, taille-1) ;                   // Tri du tableau
-        long finDuTriPar = System.nanoTime();
-
         try {
             for (int i = 0; i < count; i++) {
-                System.out.println("i: " + i);
                 verificateur.take();
             }
         } catch(InterruptedException e) {e.printStackTrace();}
+        long finDuTriPar = System.nanoTime();
 
         executeur.shutdown();
 
-        long dureeDuTriSeq = (finDuTriSeq - debutDuTriSeq) / 1_000_000 ;
         long dureeDuTriPar = (finDuTriPar - debutDuTriPar) / 1_000_000 ;
-        System.out.print("Tableau trié : ") ; 
-        afficher(tableau, 0, taille -1) ;                         // Affiche le tableau obtenu
-        System.out.println("obtenu en " + dureeDuTriSeq + " millisecondes.") ;
         System.out.print("Tableau 2 trié : ") ; 
         afficher(tableau2, 0, taille -1) ;                         // Affiche le tableau obtenu
         System.out.println("obtenu en " + dureeDuTriPar + " millisecondes.") ;
