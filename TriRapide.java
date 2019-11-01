@@ -7,7 +7,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.*;
 
 public class TriRapide {
-    private static final int taille = 1_000_000 ;                   // Longueur du tableau à trier
+    private static final int taille = 100_000_000 ;                   // Longueur du tableau à trier
     private static final int [] tableau = new int[taille] ;         // Le tableau d'entiers à trier
     private static final int [] tableau2 = new int[taille] ;         // La copie du tableau d'entiers à trier
     private static final int borne = 10 * taille ;                  // Valeur maximale dans le tableau
@@ -60,17 +60,28 @@ public class TriRapide {
     }
 
     private static void trierRapidementParallele(int[] t, int debut, int fin){
+        /* On décide de ne pas incrémenter le compteur ici car il ne faut pas
+        compter le premier appel de trierRapidementParallele, qui n'est pas dans un thread.
+        On comptera plutôt à chaque appel de submit(). */
     	if (debut < fin) {                             // S'il y a un seul élément, il n'y a rien à faire!
             int p = partitionner(t, debut, fin) ;
-            synchronized (TriRapide.class) {count += 1;}
-            verificateur.submit(new triParallele(t, debut, p-1), null);
-            synchronized (TriRapide.class) {count += 1;}
-            verificateur.submit(new triParallele(t, p+1, fin), null);
-            /*try {
-        		verificateur.take();
-        		verificateur.take();
-        	} catch(InterruptedException e) {e.printStackTrace();}*/
-        	//catch(ExecutionException e) {e.printStackTrace();}
+            if(p-1-debut > taille/100 && p-1-debut > 1000) {
+                synchronized (TriRapide.class) {count += 1;}
+                verificateur.submit(new triParallele(t, debut, p-1), null);
+            }
+            else{
+                trierRapidementSeq(t, debut, p-1) ;
+            }
+            if(fin-(p+1) > taille/100 && fin-(p+1) > 1000) {
+                synchronized (TriRapide.class) {count += 1;}
+                verificateur.submit(new triParallele(t, p+1, fin), null);
+            }
+            else{
+                trierRapidementSeq(t, p+1, fin) ;
+            }
+            /* Take est blocant. Par conséquent, on ne peut pas l'utiliser à l'intérieur de
+            la méthode trierRapidementParallèle car cela bloquerait le thread appelant (le programme
+            sera bloqué au bout de 4 threads utilisés */
         }
     }
 
@@ -112,7 +123,7 @@ public class TriRapide {
         ExecutorService executeur = Executors.newFixedThreadPool(4);
         verificateur = new ExecutorCompletionService<Integer>(executeur);
 
-        System.out.println("Démarrage du tri rapide parralèlle.") ;
+        System.out.println("Démarrage du tri rapide parallèle.") ;
 
         long debutDuTriPar = System.nanoTime();
         trierRapidementParallele(tableau2, 0, taille-1) ;                   // Tri du tableau
@@ -129,5 +140,17 @@ public class TriRapide {
         System.out.print("Tableau 2 trié : ") ; 
         afficher(tableau2, 0, taille -1) ;                         // Affiche le tableau obtenu
         System.out.println("obtenu en " + dureeDuTriPar + " millisecondes.") ;
+
+        System.out.println("La version parallèle a été " + (double)dureeDuTriSeq/(double)dureeDuTriPar
+                + " fois plus rapide que la version séquentielle sur ce tableau.");
+
+        for(int i = 0; i < tableau.length; i++){
+            if(tableau[i] != tableau2[i]){
+                System.out.println("Les tableaux triés sont différents !");
+                break;
+            }
+        }
+
+        System.out.println("Terminé.");
     }
 }
