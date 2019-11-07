@@ -5,6 +5,7 @@ import java.util.concurrent.ExecutorCompletionService;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class TriRapide {
     private static final int taille = 100_000_000 ;                   // Longueur du tableau à trier
@@ -13,7 +14,7 @@ public class TriRapide {
     private static final int borne = 10 * taille ;                  // Valeur maximale dans le tableau
 
     private static CompletionService<Integer> verificateur;
-    private static int count;
+    private static volatile AtomicInteger count;
 
     static class triParallele implements Runnable {
 
@@ -66,14 +67,14 @@ public class TriRapide {
     	if (debut < fin) {                             // S'il y a un seul élément, il n'y a rien à faire!
             int p = partitionner(t, debut, fin) ;
             if(p-1-debut > taille/100 && p-1-debut > 1000) {
-                synchronized (TriRapide.class) {count += 1;}
+                count.incrementAndGet();
                 verificateur.submit(new triParallele(t, debut, p-1), null);
             }
             else{
                 trierRapidementSeq(t, debut, p-1) ;
             }
             if(fin-(p+1) > taille/100 && fin-(p+1) > 1000) {
-                synchronized (TriRapide.class) {count += 1;}
+                count.incrementAndGet();
                 verificateur.submit(new triParallele(t, p+1, fin), null);
             }
             else{
@@ -119,7 +120,7 @@ public class TriRapide {
         afficher(tableau, 0, taille -1) ;                         // Affiche le tableau obtenu
         System.out.println("obtenu en " + dureeDuTriSeq + " millisecondes.") ;
 
-        count = 0;
+        count = new AtomicInteger();
         ExecutorService executeur = Executors.newFixedThreadPool(4);
         verificateur = new ExecutorCompletionService<Integer>(executeur);
 
@@ -128,7 +129,7 @@ public class TriRapide {
         long debutDuTriPar = System.nanoTime();
         trierRapidementParallele(tableau2, 0, taille-1) ;                   // Tri du tableau
         try {
-            for (int i = 0; i < count; i++) {
+            for (int i = 0; i < count.get(); i++) {
                 verificateur.take();
             }
         } catch(InterruptedException e) {e.printStackTrace();}
