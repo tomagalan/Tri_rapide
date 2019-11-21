@@ -14,8 +14,11 @@ public class TriRapide {
     private static final int borne = 10 * taille ;                  // Valeur maximale dans le tableau
 
     private static CompletionService<Integer> verificateur;
-    private static volatile AtomicInteger count;
+    private static volatile AtomicInteger count;               // Compteur du nombre de tâches soumises
+    private static double P;                         // Pourcentage du tableau en dessous duquel passer
+                                                                // au tri séquetiel
 
+    /* Runnable lançant le tri parallèle */
     static class triParallele implements Runnable {
 
     	int[] t;
@@ -66,14 +69,14 @@ public class TriRapide {
         On comptera plutôt à chaque appel de submit(). */
     	if (debut < fin) {                             // S'il y a un seul élément, il n'y a rien à faire!
             int p = partitionner(t, debut, fin) ;
-            if(p-1-debut > taille/100 && p-1-debut > 1000) {
+            if(p-1-debut > taille*((double)P/100) /*&& p-1-debut > 1000*/) {
                 count.incrementAndGet();
                 verificateur.submit(new triParallele(t, debut, p-1), null);
             }
             else{
                 trierRapidementSeq(t, debut, p-1) ;
             }
-            if(fin-(p+1) > taille/100 && fin-(p+1) > 1000) {
+            if(fin-(p+1) > taille*((double)P/100) /*&& fin-(p+1) > 1000*/) {
                 count.incrementAndGet();
                 verificateur.submit(new triParallele(t, p+1, fin), null);
             }
@@ -98,60 +101,65 @@ public class TriRapide {
     }
 
     public static void main(String[] args) {
-        Random alea = new Random() ;
-        for (int i=0 ; i<taille ; i++) {                          // Remplissage aléatoire du tableau
-            tableau[i] = alea.nextInt(2*borne) - borne ;
-            tableau2[i] = tableau[i] ;         
-        }
-
-        System.out.print("Tableau initial : ") ;
-        afficher(tableau, 0, taille -1) ;                         // Affiche le tableau à trier
-        System.out.print("Tableau initial 2 : ") ;
-        afficher(tableau2, 0, taille -1) ;                         // Affiche le tableau à trier
-
-        System.out.println("Démarrage du tri rapide séquentiel.") ;
-
-        long debutDuTriSeq = System.nanoTime();
-        trierRapidementSeq(tableau, 0, taille-1) ;                   // Tri du tableau
-        long finDuTriSeq = System.nanoTime();
-
-        long dureeDuTriSeq = (finDuTriSeq - debutDuTriSeq) / 1_000_000 ;
-        System.out.print("Tableau trié : ") ;
-        afficher(tableau, 0, taille -1) ;                         // Affiche le tableau obtenu
-        System.out.println("obtenu en " + dureeDuTriSeq + " millisecondes.") ;
-
-        count = new AtomicInteger();
-        ExecutorService executeur = Executors.newFixedThreadPool(4);
-        verificateur = new ExecutorCompletionService<Integer>(executeur);
-
-        System.out.println("Démarrage du tri rapide parallèle.") ;
-
-        long debutDuTriPar = System.nanoTime();
-        trierRapidementParallele(tableau2, 0, taille-1) ;                   // Tri du tableau
-        try {
-            for (int i = 0; i < count.get(); i++) {
-                verificateur.take();
+        for(int p = 1; p <100_000_000; p*=10) {
+            P = 1 / (p*0.01);
+            System.out.println("-------------------------------- P = " + P + " % ------------------------------");
+            Random alea = new Random();
+            for (int i = 0; i < taille; i++) {                          // Remplissage aléatoire du tableau
+                tableau[i] = alea.nextInt(2 * borne) - borne;
+                tableau2[i] = tableau[i];
             }
-        } catch(InterruptedException e) {e.printStackTrace();}
-        long finDuTriPar = System.nanoTime();
 
-        executeur.shutdown();
+            System.out.print("Tableau initial : ");
+            afficher(tableau, 0, taille - 1);                         // Affiche le tableau à trier
+            System.out.print("Tableau initial 2 : ");
+            afficher(tableau2, 0, taille - 1);                         // Affiche le tableau à trier
 
-        long dureeDuTriPar = (finDuTriPar - debutDuTriPar) / 1_000_000 ;
-        System.out.print("Tableau 2 trié : ") ; 
-        afficher(tableau2, 0, taille -1) ;                         // Affiche le tableau obtenu
-        System.out.println("obtenu en " + dureeDuTriPar + " millisecondes.") ;
+            System.out.println("Démarrage du tri rapide séquentiel.");
 
-        System.out.println("La version parallèle a été " + (double)dureeDuTriSeq/(double)dureeDuTriPar
-                + " fois plus rapide que la version séquentielle sur ce tableau.");
+            long debutDuTriSeq = System.nanoTime();
+            trierRapidementSeq(tableau, 0, taille - 1);                   // Tri du tableau
+            long finDuTriSeq = System.nanoTime();
 
-        for(int i = 0; i < tableau.length; i++){
-            if(tableau[i] != tableau2[i]){
-                System.out.println("Les tableaux triés sont différents !");
-                break;
+            long dureeDuTriSeq = (finDuTriSeq - debutDuTriSeq) / 1_000_000;
+            System.out.print("Tableau trié : ");
+            afficher(tableau, 0, taille - 1);                         // Affiche le tableau obtenu
+            System.out.println("obtenu en " + dureeDuTriSeq + " millisecondes.");
+
+            count = new AtomicInteger();
+            ExecutorService executeur = Executors.newFixedThreadPool(4);
+            verificateur = new ExecutorCompletionService<Integer>(executeur);
+
+            System.out.println("Démarrage du tri rapide parallèle.");
+
+            long debutDuTriPar = System.nanoTime();
+            trierRapidementParallele(tableau2, 0, taille - 1);                   // Tri du tableau
+            try {
+                for (int i = 0; i < count.get(); i++) {
+                    verificateur.take();
+                }
+            } catch (InterruptedException e) {
+                e.printStackTrace();
             }
-        }
+            long finDuTriPar = System.nanoTime();
 
-        System.out.println("Terminé.");
+            executeur.shutdown();
+
+            long dureeDuTriPar = (finDuTriPar - debutDuTriPar) / 1_000_000;
+            System.out.print("Tableau 2 trié : ");
+            afficher(tableau2, 0, taille - 1);                         // Affiche le tableau obtenu
+            System.out.println("obtenu en " + dureeDuTriPar + " millisecondes.");
+            System.out.println("Nombre de tâches créées : " + count);
+            System.out.println("La version parallèle a été " + (double) dureeDuTriSeq / (double) dureeDuTriPar
+                    + " fois plus rapide que la version séquentielle sur ce tableau.");
+
+            for (int i = 0; i < tableau.length; i++) {
+                if (tableau[i] != tableau2[i]) {
+                    System.out.println("Les tableaux triés sont différents !");
+                    break;
+                }
+            }
+            System.out.println("Terminé.");
+        }
     }
 }
